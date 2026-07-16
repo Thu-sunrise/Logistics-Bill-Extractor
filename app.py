@@ -16,7 +16,7 @@ from core.excel_exporter import export_to_excel
 class App:
     def __init__(self, root):
         self.root = root
-        self.root.title("Phần Mềm Bóc Tách Bill Logistics v2.0")
+        self.root.title("Phần Mềm Bóc Tách Bill Logistics v1.0")
         self.root.configure(bg="#F8FAFC") # Màu nền sáng hiện đại hơn
         
         # Style ttk
