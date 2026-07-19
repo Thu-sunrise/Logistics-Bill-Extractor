@@ -216,3 +216,23 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ---------------------------------------------------
+# Logistics Bill Extractor Specific Ignores
+# ---------------------------------------------------
+
+# Nuitka build artifacts
+app.build/
+app.dist/
+
+# Inno Setup output
+Output/
+
+# Application output files
+*.xlsx
+
+# PDF bills (do not commit customer bills)
+*.pdf
+
+# Test outputs
+test/test_output.json

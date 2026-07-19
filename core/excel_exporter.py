@@ -3,14 +3,54 @@ from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
 
 COLUMNS = [
-    "File name", "Carrier", "Shipper", "Consignee", "Notify party 1",
-    "POL", "Vessel name", "Voyage number", "POD", "Place of delivery",
+    "File name", "Carrier", "Booking", "Bill no.", "Shipper", "Consignee", 
+    "Notify party 1", "Notify party 2", "Notify party 3", "Remark",
+    "POR", "POL", "Vessel name", "Voyage number", "POD", "Place of delivery",
     "Cont no.", "Seal no.", "Total carton", "Cont type",
     "Total GW", "Total CBM", "ATD", "Description"
 ]
 
 def export_to_excel(all_data, output_path):
+    """
+    Exports all extracted data to an Excel file.
+    Handles column renaming, formatting, and auto-merging cells with identical data 
+    (e.g., Booking number, Vessel name) across multiple rows belonging to the same PDF file.
+    """
     df = pd.DataFrame(all_data, columns=COLUMNS)
+    
+    # Map internal names to user requested names
+    rename_map = {
+        "Booking": "Booking number",
+        "Bill no.": "Bill number",
+        "Cont no.": "container number",
+        "Seal no.": "Seal",
+        "Total carton": "Total quantity",
+        "Total CBM": "Total volume",
+        "Remark": "Remarks"
+    }
+    
+    # Column width adjustment
+    header_widths = {
+        "File name": 25, "Carrier": 10, "Shipper": 35, "Consignee": 35,
+        "Booking": 18, "Bill number": 18, "Notify party 1": 35,
+        "Notify party 2": 35, "Notify party 3": 35,
+        "Vessel name": 25, "Voyage number": 15, "POR": 20, "POL": 20, "POD": 20,
+        "container number": 18, "Seal": 18, "Total quantity": 15,
+        "Cont type": 15, "Total GW": 15, "Total volume": 15, "ATD": 15,
+        "Description": 45, "Remarks": 45
+    }
+
+    # Reorder columns as requested (plus File name and Carrier at the start)
+    export_order = [
+        "File name", "Carrier", "Shipper", "Consignee", "Booking", "Bill no.", 
+        "Notify party 1", "Notify party 2", "Notify party 3",
+        "Vessel name", "Voyage number", "POR", "POL", "POD", 
+        "Cont no.", "Seal no.", "Total carton", "Cont type", "Total GW", 
+        "Total CBM", "ATD", "Description", "Remark"
+    ]
+    
+    df = df[export_order]
+    df.rename(columns=rename_map, inplace=True)
 
     writer = pd.ExcelWriter(output_path, engine='openpyxl')
     df.to_excel(writer, index=False, sheet_name='ONE Bills')
@@ -30,18 +70,15 @@ def export_to_excel(all_data, output_path):
 
     ws.row_dimensions[1].height = 30
 
-    # Body: wrap text cho các ô dài
-    # Căn lề trên (Top) cho tất cả các ô để dễ đọc khi bị merge
-    for row in ws.iter_rows(min_row=2, max_row=len(df)+1, min_col=1, max_col=len(COLUMNS)):
+    # Set top-left alignment for all cells for better readability in merged cells
+    for row in ws.iter_rows(min_row=2, max_row=len(df)+1, min_col=1, max_col=len(df.columns)):
         for cell in row:
             cell.alignment = Alignment(vertical='top', horizontal='left', wrap_text=True)
 
-    # ==========================================
-    # Logic Gộp ô (Merge Cells) cho các cột chung
-    # ==========================================
-    # Danh sách các cột KHÔNG gộp (cột riêng của từng container)
-    container_cols = ["Cont no.", "Seal no.", "Total carton", "Cont type", "Total GW", "Total CBM"]
-    merge_col_indices = [COLUMNS.index(col) + 1 for col in COLUMNS if col not in container_cols]
+
+    # List of columns that should NOT be merged (container-specific columns)
+    container_cols = ["container number", "Seal", "Total quantity", "Cont type", "Total GW", "Total volume"]
+    merge_col_indices = [list(df.columns).index(col) + 1 for col in df.columns if col not in container_cols]
     
     start_row = 2
     for i in range(1, len(df)):
@@ -52,7 +89,7 @@ def export_to_excel(all_data, output_path):
                     ws.merge_cells(start_row=start_row, start_column=col_idx, end_row=end_row, end_column=col_idx)
             start_row = i + 2
             
-    # Gộp group cuối cùng
+    # Merge the final group
     end_row = len(df) + 1
     if end_row > start_row:
         for col_idx in merge_col_indices:

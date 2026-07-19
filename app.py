@@ -1,7 +1,8 @@
 import sys
 import os
+import updater
 
-# Fix import khi chạy từ thư mục logistics_tool
+# Fix import path when running from logistics_tool directory
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import tkinter as tk
@@ -16,8 +17,8 @@ from core.excel_exporter import export_to_excel
 class App:
     def __init__(self, root):
         self.root = root
-        self.root.title("Phần Mềm Bóc Tách Bill Logistics v1.0")
-        self.root.configure(bg="#F8FAFC") # Màu nền sáng hiện đại hơn
+        self.root.title("Logistics Bill Extractor v1.0")
+        self.root.configure(bg="#F8FAFC") # Modern light background color
         
         # Style ttk
         style = ttk.Style()
@@ -33,26 +34,26 @@ class App:
         ).pack()
 
         tk.Label(
-            header_frame, text="Hỗ trợ tự động nhận diện và trích xuất dữ liệu từ các file PDF Bill of Lading",
+            header_frame, text="Automatically identify and extract data from Bill of Lading PDF files",
             font=("Segoe UI", 10), fg="#94A3B8", bg="#0F172A"
         ).pack(pady=(2, 0))
 
-        # ── Hãng tàu hỗ trợ ────────────────────────────────────
+        # ── Supported Carriers ────────────────────────────────────
         support_frame = tk.Frame(root, bg="#E2E8F0", pady=6, padx=10)
         support_frame.pack(fill="x", pady=(0, 15))
         
         tk.Label(
             support_frame, 
-            text="Các hãng tàu đang hỗ trợ bóc tách: ONE, OOCL, ZIM, SJJ",
+            text="Supported shipping lines for extraction: ONE, OOCL, ZIM, SJJ, MSC, HMM",
             font=("Segoe UI", 10, "bold"), fg="#0F172A", bg="#E2E8F0"
         ).pack()
 
-        # ── Khu vực chọn file ─────────────────────────────────
+        # ── File Selection Area ─────────────────────────────────
         main_frame = tk.Frame(root, bg="#F8FAFC")
         main_frame.pack(padx=25, fill="both", expand=True)
 
         tk.Label(
-            main_frame, text="1. Chọn đường dẫn file hoặc thư mục cần xử lý:",
+            main_frame, text="1. Select file or directory to process:",
             font=("Segoe UI", 10, "bold"), fg="#334155", bg="#F8FAFC"
         ).pack(anchor="w", pady=(10, 5))
 
@@ -66,27 +67,27 @@ class App:
             bg="#FFFFFF", fg="#1E293B", readonlybackground="#FFFFFF"
         ).pack(side=tk.LEFT, ipady=6, expand=True, fill="x")
 
-        # ── Các nút chọn ──────────────────────────────────────
+        # ── Selection Buttons ──────────────────────────────────────
         btn_frame = tk.Frame(main_frame, bg="#F8FAFC")
         btn_frame.pack(fill="x", pady=10)
 
         tk.Button(
-            btn_frame, text="Chọn Thư Mục",
+            btn_frame, text="Select Folder",
             command=self.browse_folder,
             bg="#2563EB", fg="white", font=("Segoe UI", 10, "bold"),
             relief="flat", padx=15, pady=6, cursor="hand2", activebackground="#1D4ED8", activeforeground="white"
         ).pack(side=tk.LEFT, padx=(0, 10))
 
         tk.Button(
-            btn_frame, text="Chọn File PDF",
+            btn_frame, text="Select PDF File",
             command=self.browse_file,
             bg="#F59E0B", fg="white", font=("Segoe UI", 10, "bold"),
             relief="flat", padx=15, pady=6, cursor="hand2", activebackground="#D97706", activeforeground="white"
         ).pack(side=tk.LEFT)
 
-        # ── Log console ───────────────────────────────────────
+        # ── Log Console ───────────────────────────────────────
         tk.Label(
-            main_frame, text="2. Nhật ký tiến trình:",
+            main_frame, text="2. Process Log:",
             font=("Segoe UI", 10, "bold"), fg="#334155", bg="#F8FAFC"
         ).pack(anchor="w", pady=(15, 5))
 
@@ -97,19 +98,19 @@ class App:
         )
         self.log_text.pack(fill="both", expand=True)
 
-        # ── Nút chạy ──────────────────────────────────────────
+        # ── Action Button ──────────────────────────────────────────
         action_frame = tk.Frame(root, bg="#F8FAFC", pady=20)
         action_frame.pack(fill="x")
 
         self.btn_run = tk.Button(
-            action_frame, text="BẮT ĐẦU TRÍCH XUẤT",
+            action_frame, text="START EXTRACTION",
             font=("Segoe UI", 13, "bold"), bg="#10B981", fg="white",
             relief="flat", padx=25, pady=10, cursor="hand2", activebackground="#059669", activeforeground="white",
             command=self.start_processing
         )
         self.btn_run.pack()
 
-        # Biến lưu danh sách file đã chọn
+        # Variable to store selected files
         self._selected_files = []
 
     # ── Helpers ───────────────────────────────────────────────
@@ -121,34 +122,34 @@ class App:
         self.root.update()
 
     def browse_folder(self):
-        folder = filedialog.askdirectory(title="Chọn thư mục chứa file PDF")
+        folder = filedialog.askdirectory(title="Select folder containing PDF files")
         if not folder:
             return
         pdfs = [os.path.join(folder, f) for f in os.listdir(folder) if f.lower().endswith(".pdf")]
         self._selected_files = pdfs
         self._output_dir = folder
         self.path_var.set(folder)
-        self.log(f"[*] Thư mục: {folder}  -  Tìm thấy {len(pdfs)} file PDF")
+        self.log(f"[*] Folder: {folder}  -  Found {len(pdfs)} PDF file(s)")
 
     def browse_file(self):
         files = filedialog.askopenfilenames(
-            title="Chọn file PDF",
+            title="Select PDF files",
             filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")]
         )
         if not files:
             return
         self._selected_files = list(files)
         self._output_dir = os.path.dirname(files[0])
-        self.path_var.set(f"{len(files)} file đã chọn  -  {self._output_dir}")
-        self.log(f"[*] Đã chọn {len(files)} file từ: {self._output_dir}")
+        self.path_var.set(f"{len(files)} file(s) selected  -  {self._output_dir}")
+        self.log(f"[*] Selected {len(files)} file(s) from: {self._output_dir}")
 
     def start_processing(self):
         if not self._selected_files:
-            messagebox.showwarning("Chưa chọn file", "Vui lòng chọn Thư Mục hoặc File PDF trước!")
+            messagebox.showwarning("No file selected", "Please select a Folder or PDF File first!")
             return
-        self.btn_run.config(state="disabled", text="ĐANG XỬ LÝ...", bg="#9E9E9E")
+        self.btn_run.config(state="disabled", text="PROCESSING...", bg="#9E9E9E")
         self.log("\n" + "═" * 60)
-        self.log("  BẮT ĐẦU QUÁ TRÌNH TRÍCH XUẤT")
+        self.log("  STARTING EXTRACTION PROCESS")
         self.log("═" * 60)
         threading.Thread(target=self._process, daemon=True).start()
 
@@ -160,56 +161,58 @@ class App:
             fname = os.path.basename(pdf_path)
             self.log(f"  [{i+1}/{total}] - {fname}")
             try:
-                rows = process_pdf(pdf_path)
+                rows, carrier = process_pdf(pdf_path)
                 if rows:
                     all_data.extend(rows)
-                    self.log(f"       OK  ({len(rows)} container)")
+                    self.log(f"       OK - {carrier} ({len(rows)} containers)")
                 else:
-                    self.log(f"       Không bóc được dữ liệu")
+                    self.log(f"       No valid data extracted")
             except Exception as e:
-                self.log(f"       LỖI: {e}")
+                self.log(f"       ERROR: {e}")
 
         if all_data:
             import datetime
-            timestamp = datetime.datetime.now().strftime("%H%M%S") # Timestamp ngắn gọn giờ phút giây
+            timestamp = datetime.datetime.now().strftime("%H%M%S") # Short timestamp (HHMMSS)
             
             if len(self._selected_files) == 1:
-                # Nếu chỉ xử lý 1 file, lấy tên file đó làm tên Excel
+                # If processing 1 file, use its name for the Excel file
                 base_name = os.path.splitext(os.path.basename(self._selected_files[0]))[0]
                 out_name = f"{base_name}_Extracted_{timestamp}.xlsx"
             else:
-                # Nếu quét cả thư mục (nhiều file), lấy tên thư mục làm tên
+                # If processing a folder (multiple files), use the folder name
                 folder_name = os.path.basename(os.path.normpath(self._output_dir))
                 out_name = f"{folder_name}_Batch_{len(self._selected_files)}files_{timestamp}.xlsx"
                 
             out_excel = os.path.join(self._output_dir, out_name)
-            self.log(f"\nĐang ghi file Excel: {out_name}...")
+            self.log(f"\nWriting to Excel file: {out_name}...")
             try:
                 export_to_excel(all_data, out_excel)
-                self.log(f"XONG!  {len(all_data)} dòng  -  {out_excel}")
+                self.log(f"DONE!  {len(all_data)} rows  -  {out_excel}")
                 if os.name == "nt":
                     out_excel_win = os.path.normpath(out_excel)
                     subprocess.Popen(f'explorer /select,"{out_excel_win}"')
                 messagebox.showinfo(
-                    "Hoàn thành",
-                    f"Đã trích xuất {len(all_data)} dòng dữ liệu!\nFile: {out_excel}"
+                    "Completed",
+                    f"Successfully extracted {len(all_data)} rows of data!\nFile: {out_excel}"
                 )
             except Exception as e:
-                self.log(f"Lỗi ghi Excel: {e}")
+                self.log(f"Excel write error: {e}")
         else:
-            self.log("Không trích xuất được dữ liệu nào hợp lệ.")
+            self.log("No valid data was extracted.")
 
-        self.btn_run.config(state="normal", text="BẮT ĐẦU TRÍCH XUẤT", bg="#4CAF50")
+        self.btn_run.config(state="normal", text="START EXTRACTION", bg="#4CAF50")
 
 
 if __name__ == "__main__":
+    
+    updater.check_for_updates()
     root = tk.Tk()
     root.resizable(False, False)
 
     app = App(root)
     root.geometry("750x620")
 
-    # Căn giữa màn hình và bắt buộc hiện lên trên
+    # Center the window on the screen and force it to be on top
     root.update_idletasks()
     sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
     x = (sw - 750) // 2
