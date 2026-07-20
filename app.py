@@ -2,7 +2,6 @@ import sys
 import os
 import updater
 
-# Fix import path when running from logistics_tool directory
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import tkinter as tk
@@ -24,7 +23,7 @@ class App:
         style = ttk.Style()
         style.theme_use('clam')
 
-        # ── Header ──────────────────────────────────────────────
+        # Header
         header_frame = tk.Frame(root, bg="#0F172A", pady=15)
         header_frame.pack(fill="x")
         
@@ -38,7 +37,7 @@ class App:
             font=("Segoe UI", 10), fg="#94A3B8", bg="#0F172A"
         ).pack(pady=(2, 0))
 
-        # ── Supported Carriers ────────────────────────────────────
+        # Supported Carriers
         support_frame = tk.Frame(root, bg="#E2E8F0", pady=6, padx=10)
         support_frame.pack(fill="x", pady=(0, 15))
         
@@ -48,7 +47,7 @@ class App:
             font=("Segoe UI", 10, "bold"), fg="#0F172A", bg="#E2E8F0"
         ).pack()
 
-        # ── File Selection Area ─────────────────────────────────
+        # File Selection Area
         main_frame = tk.Frame(root, bg="#F8FAFC")
         main_frame.pack(padx=25, fill="both", expand=True)
 
@@ -67,7 +66,7 @@ class App:
             bg="#FFFFFF", fg="#1E293B", readonlybackground="#FFFFFF"
         ).pack(side=tk.LEFT, ipady=6, expand=True, fill="x")
 
-        # ── Selection Buttons ──────────────────────────────────────
+        # Selection Buttons
         btn_frame = tk.Frame(main_frame, bg="#F8FAFC")
         btn_frame.pack(fill="x", pady=10)
 
@@ -85,7 +84,7 @@ class App:
             relief="flat", padx=15, pady=6, cursor="hand2", activebackground="#D97706", activeforeground="white"
         ).pack(side=tk.LEFT)
 
-        # ── Log Console ───────────────────────────────────────
+        # Log Console
         tk.Label(
             main_frame, text="2. Process Log:",
             font=("Segoe UI", 10, "bold"), fg="#334155", bg="#F8FAFC"
@@ -98,7 +97,7 @@ class App:
         )
         self.log_text.pack(fill="both", expand=True)
 
-        # ── Action Button ──────────────────────────────────────────
+        # Action Button
         action_frame = tk.Frame(root, bg="#F8FAFC", pady=20)
         action_frame.pack(fill="x")
 
@@ -113,7 +112,7 @@ class App:
         # Variable to store selected files
         self._selected_files = []
 
-    # ── Helpers ───────────────────────────────────────────────
+    # Helpers
     def log(self, msg, color=None):
         self.log_text.config(state="normal")
         self.log_text.insert(tk.END, msg + "\n")
