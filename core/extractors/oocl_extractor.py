@@ -22,16 +22,46 @@ class OoclExtractor(BaseExtractor):
                     lines = text.split('\n')
                     all_lines.extend(lines)
                     
-                    # Scan for TOTAL: at the end of the page to get Total GW and Total CBM
+                    # Scan for TOTAL at the end of the page to get Total GW and Total CBM
                     for line in lines:
-                        if "TOTAL:" in line.upper() and ("KGS" in line.upper() or "CBM" in line.upper()):
-                            gw_match = re.search(r'([\d.]+)\s*KGS', line.upper())
+                        if "TOTAL" in line.upper() and ("KGS" in line.upper() or "CBM" in line.upper()):
+                            gw_match = re.search(r'([\d.,]+)\s*KGS', line.upper())
                             if gw_match:
                                 total_gw = gw_match.group(1) + " KGS"
                             
-                            cbm_match = re.search(r'([\d.]+)\s*CBM', line.upper())
+                            cbm_match = re.search(r'([\d.,]+)\s*CBM', line.upper())
                             if cbm_match:
                                 total_cbm = cbm_match.group(1) + " CBM"
+                                
+            # Fallback for Total GW and CBM if not found by "TOTAL" keyword
+            if not total_gw or not total_cbm:
+                kgs_list = []
+                cbm_list = []
+                for line in all_lines:
+                    for match in re.finditer(r'([\d.,]+)\s*KGS', line.upper()):
+                        # Only accept if it's roughly on the right side of the page
+                        if match.start() > len(line) * 0.4:
+                            try:
+                                num = float(match.group(1).replace(',', ''))
+                                kgs_list.append((num, match.group(1) + " KGS"))
+                            except ValueError:
+                                pass
+                                
+                    for match in re.finditer(r'([\d.,]+)\s*CBM', line.upper()):
+                        if match.start() > len(line) * 0.4:
+                            try:
+                                num = float(match.group(1).replace(',', ''))
+                                cbm_list.append((num, match.group(1) + " CBM"))
+                            except ValueError:
+                                pass
+                                
+                if not total_gw and kgs_list:
+                    kgs_list.sort(key=lambda x: x[0])
+                    total_gw = kgs_list[-1][1]
+                    
+                if not total_cbm and cbm_list:
+                    cbm_list.sort(key=lambda x: x[0])
+                    total_cbm = cbm_list[-1][1]
         
             first_page_text = pdf.pages[0].extract_text(layout=True)
             if first_page_text:
@@ -162,12 +192,22 @@ class OoclExtractor(BaseExtractor):
                 data["Remark"] = "\n".join(remark_lines)
 
             # 6. Description (ignore ---- lines)
-            data["Description"] = self.extract_description_by_bbox(
+            desc_raw = self.extract_description_by_bbox(
                 top_kw_list=["DESCRIPTION", "PARTICULARS"],
                 bottom_kw_list=["CONTINUED", "NOTICE", "PAYABLE", "OCEAN"],
                 x_range=(190, 400)
             )
-            data["Description"] = re.sub(r'(?m)^[-_]{3,}.*$', '', data["Description"]).strip()
+            desc_raw = re.sub(r'(?m)^[-_]{3,}.*$', '', desc_raw).strip()
+            
+            # Dừng lại ở "TOTAL XXXX PCS" (hoặc các đơn vị tương đương), bao gồm cả cụm này
+            match = re.search(r'(?i)TOTAL\s+[\d,]+\s*(?:PCS|PACKAGES|CARTONS|BOXES|PKGS|PIECES)', desc_raw)
+            if match:
+                desc_raw = desc_raw[:match.end()].strip()
+                
+            data["Description"] = desc_raw
+            
+            # Resolve asterisk continuations before finalizing rows
+            self.resolve_asterisks(data, pdf)
 
         result = []
         if not containers:
@@ -183,3 +223,73 @@ class OoclExtractor(BaseExtractor):
                 result.append(row)
 
         return result
+
+    def resolve_asterisks(self, data, pdf):
+        blocks = {"*": [], "**": [], "***": []}
+        current_marker = None
+        current_x0 = None
+        
+        for page in pdf.pages:
+            words = page.extract_words()
+            if not words: continue
+            
+            # Group words into lines
+            words.sort(key=lambda w: (w['top'], w['x0']))
+            lines = []
+            current_line = [words[0]]
+            for w in words[1:]:
+                if abs(w['top'] - current_line[-1]['top']) < 5:
+                    current_line.append(w)
+                else:
+                    lines.append(current_line)
+                    current_line = [w]
+            if current_line:
+                lines.append(current_line)
+                
+            for line in lines:
+                full_text = " ".join(w['text'] for w in line)
+                if "TO BE CONTINUED ON ATTACHED" in full_text:
+                    continue
+                    
+                first_word = line[0]
+                m = re.match(r'^(\*{1,3})(?!\*)(.*)', first_word['text'])
+                
+                if m:
+                    marker = m.group(1)
+                    remainder = m.group(2)
+                    current_marker = marker
+                    current_x0 = first_word['x0']
+                    
+                    text_line = remainder
+                    # Extract words in the same column roughly (within 400px)
+                    column_words = [w for w in line[1:] if w['x0'] < current_x0 + 400]
+                    if column_words:
+                        text_line += (" " if text_line else "") + " ".join(w['text'] for w in column_words)
+                        
+                    if text_line.strip():
+                        blocks[current_marker].append(text_line.strip())
+                else:
+                    if current_marker:
+                        # Continue if aligned within 80px tolerance
+                        if abs(first_word['x0'] - current_x0) < 80:
+                            column_words = [w for w in line if w['x0'] < current_x0 + 400]
+                            text_line = " ".join(w['text'] for w in column_words)
+                            if re.search(r'[-_]{3,}', text_line) or "PAGE:" in text_line.upper() or "TOTAL:" in text_line.upper():
+                                current_marker = None
+                            elif text_line.strip():
+                                blocks[current_marker].append(text_line.strip())
+
+        # Map and append blocks to truncated fields
+        for key in ["Shipper", "Consignee", "Notify party 1", "Notify party 2", "Description"]:
+            if data.get(key):
+                val = data.get(key).strip()
+                # Check from *** down to *
+                for marker in ["***", "**", "*"]:
+                    if val.endswith(marker):
+                        # Remove marker from the field value
+                        val = val[:-len(marker)].strip()
+                        # Append the collected content
+                        if blocks[marker]:
+                            val += "\n" + "\n".join(blocks[marker])
+                        data[key] = val
+                        break # Stop after finding the matching marker

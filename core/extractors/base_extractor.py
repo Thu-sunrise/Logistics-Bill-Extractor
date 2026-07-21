@@ -105,6 +105,7 @@ class BaseExtractor:
                             desc_lines.append(text)
                         
         return "\n".join(desc_lines)
+
     def find_word_bbox(self, page, keyword, x_range=None):
         """
         Find the first word containing the keyword (case-insensitive) 
@@ -155,7 +156,6 @@ class BaseExtractor:
         else:
             bbox = None
             
-        print(f"[{top_keyword} -> {bottom_keyword}] top_word={top_word} bottom_word={bottom_word} -> bbox={bbox}")
         return bbox
 
     def extract_text_by_bbox(self, page, bbox):
@@ -201,7 +201,7 @@ class BaseExtractor:
         words = page.extract_words()
         if y_range:
             min_y, max_y = y_range
-            words = [w for w in words if min_y <= w['top'] and w['bottom'] <= max_y]
+            words = [w for w in words if min_y <= w['top'] and w['top'] < max_y]
             
         line_words = self.group_words_by_y(words)
         

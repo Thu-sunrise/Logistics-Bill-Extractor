@@ -39,7 +39,19 @@ class MscExtractor(BaseExtractor):
             c = self.extract_dynamic_left_block(p1, 'CONSIGNEE:', 'NOTIFY', x_min=0, x_max=300)
             row["Consignee"] = re.sub(r'^CONSIGNEE:\s*', '', c).strip()
             
-            n1 = self.extract_dynamic_left_block(p1, 'NOTIFY', 'VESSEL', x_min=0, x_max=300)
+            # Lấy chính xác tọa độ bên dưới chữ 'Clause 20)' để tránh dính chữ
+            n_start = self.find_word_bbox(p1, 'Clause 20)', x_range=(0, 300))
+            if not n_start:
+                n_start = self.find_word_bbox(p1, 'NOTIFY', x_range=(0, 300))
+            
+            n_end = self.find_word_bbox(p1, 'VESSEL', x_range=(0, 300))
+            
+            if n_start and n_end:
+                bbox = (0, n_start['bottom'] + 2, 300, n_end['top'] - 2)
+                n1 = self.extract_text_by_bbox(p1, bbox)
+            else:
+                n1 = self.extract_dynamic_left_block(p1, 'NOTIFY', 'VESSEL', x_min=0, x_max=300)
+                
             if 'CONTINUED IN CARRIER' in n1:
                 n1 = n1.split('CONTINUED IN CARRIER')[0]
             n1_lines = [ln for ln in n1.split('\n') if 'NOTIFY' not in ln.upper() and 'Clause 20' not in ln]
@@ -140,6 +152,12 @@ class MscExtractor(BaseExtractor):
                         row["Notify party 3"] = n3_pts[1].strip()
                     else:
                         row["Notify party 1"] += "\n" + n_pt.strip()
+                        
+                # Loại bỏ dấu # (điểm nối) sau khi đã ghép chuỗi
+                if row.get("Notify party 1"):
+                    cleaned_notify = row["Notify party 1"].replace('#', '')
+                    row["Notify party 1"] = '\n'.join([line.strip() for line in cleaned_notify.split('\n') if line.strip()])
+
                 d_str = "(Continued on attached Bill of Lading Rider pages(s), if applicable)"
                 if d_str in d_text:
                     d_text = d_text.split(d_str)[-1].strip()
