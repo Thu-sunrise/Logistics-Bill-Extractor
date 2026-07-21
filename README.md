@@ -27,6 +27,8 @@
 Please refer to the following documents for detailed information:
 - **[User Manual (How to Install & Use)](docs/user_manual.md)**
 - **[Technical Architecture & File Structure](docs/architecture.md)**
+- **[Automated Testing Guide](tests/README.md)**
+- **[Release & Update Guide](docs/UPDATE_GUIDE.md)**
 
 ---
 
@@ -44,7 +46,12 @@ pip install -r requirements.txt
 python app.py
 ```
 
-### 3. Packaging & Building `.exe` file
+### 3. Run Automated Tests
+```bash
+pytest tests/
+```
+
+### 4. Packaging & Building `.exe` file
 The project uses **Nuitka** to compile Python source code into C code to increase security, speed up performance, and avoid false positives by antivirus software (like Windows Defender).
 ```bash
 python -m nuitka --standalone --mingw64 --plugin-enable=tk-inter --windows-console-mode=disable --windows-icon-from-ico=icon.ico --output-filename=LogisticsBillExtractor.exe app.py

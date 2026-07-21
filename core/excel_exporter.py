@@ -7,7 +7,7 @@ COLUMNS = [
     "Notify party 1", "Notify party 2", "Notify party 3", "Remark",
     "POR", "POL", "Vessel name", "Voyage number", "POD", "Place of delivery",
     "Cont no.", "Seal no.", "Total carton", "Cont type",
-    "Total GW", "Total CBM", "ATD", "Description"
+    "Total GW", "Tare", "Total CBM", "ATD", "Freight", "Description"
 ]
 
 def export_to_excel(all_data, output_path):
@@ -36,8 +36,8 @@ def export_to_excel(all_data, output_path):
         "Notify party 2": 35, "Notify party 3": 35,
         "Vessel name": 25, "Voyage number": 15, "POR": 20, "POL": 20, "POD": 20,
         "container number": 18, "Seal": 18, "Total quantity": 15,
-        "Cont type": 15, "Total GW": 15, "Total volume": 15, "ATD": 15,
-        "Description": 45, "Remarks": 45
+        "Cont type": 15, "Total GW": 15, "Tare": 15, "Total volume": 15, "ATD": 15,
+        "Freight": 25, "Description": 45, "Remarks": 45
     }
 
     # Reorder columns as requested (plus File name and Carrier at the start)
@@ -45,8 +45,8 @@ def export_to_excel(all_data, output_path):
         "File name", "Carrier", "Shipper", "Consignee", "Booking", "Bill no.", 
         "Notify party 1", "Notify party 2", "Notify party 3",
         "Vessel name", "Voyage number", "POR", "POL", "POD", 
-        "Cont no.", "Seal no.", "Total carton", "Cont type", "Total GW", 
-        "Total CBM", "ATD", "Description", "Remark"
+        "Cont no.", "Seal no.", "Total carton", "Cont type", "Total GW", "Tare",
+        "Total CBM", "ATD", "Freight", "Description", "Remark"
     ]
     
     df = df[export_order]
@@ -77,7 +77,7 @@ def export_to_excel(all_data, output_path):
 
 
     # List of columns that should NOT be merged (container-specific columns)
-    container_cols = ["container number", "Seal", "Total quantity", "Cont type", "Total GW", "Total volume"]
+    container_cols = ["container number", "Seal", "Total quantity", "Cont type", "Total GW", "Tare", "Total volume"]
     merge_col_indices = [list(df.columns).index(col) + 1 for col in df.columns if col not in container_cols]
     
     start_row = 2

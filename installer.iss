@@ -1,10 +1,10 @@
 [Setup]
 AppName=LogisticsBillExtractor
-AppVersion=1.0.0
+AppVersion=1.0.1
 DefaultDirName={pf}\LogisticsBillExtractor
 DefaultGroupName=LogisticsBillExtractor
 OutputDir=.\Output
-OutputBaseFilename=Setup_LogisticsBillExtractor_v1.0.0
+OutputBaseFilename=Setup_LogisticsBillExtractor_v1.0.1
 Compression=lzma
 SolidCompression=yes
 SetupIconFile=icon.ico

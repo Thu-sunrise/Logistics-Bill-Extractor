@@ -124,6 +124,172 @@ class OneExtractor(BaseExtractor):
                     if gw_match:
                         cont["Total GW"] = gw_match.group(1)
                     cbm_match = re.search(r'([\d.,]+)\s*(M3|CBM)', p_up)
+import re
+import pdfplumber
+from .base_extractor import BaseExtractor
+
+class OneExtractor(BaseExtractor):
+    def __init__(self, pdf_path):
+        super().__init__(pdf_path)
+        self.carrier_name = "ONE"
+
+    def extract(self):
+        """Extracts data from ONE bills of lading, supporting multi-page descriptions."""
+        
+        with pdfplumber.open(self.pdf_path) as pdf:
+            total_pages = len(pdf.pages)
+            pages_to_read = 2
+            
+            first_page_text = pdf.pages[0].extract_text(layout=True) or ""
+            if first_page_text:
+                m = re.search(r'PAGE\s*[:]?\s*1\s*(?:OF|O F|/)?\s*(\d+)', first_page_text, re.IGNORECASE)
+                if m:
+                    pages_to_read = int(m.group(1))
+            pages_to_read = min(pages_to_read, total_pages)
+
+            full_text = first_page_text + "\n"
+            for i in range(1, pages_to_read):
+                text = pdf.pages[i].extract_text(layout=True)
+                if text:
+                    full_text += text + "\n"
+
+            # 1. Left blocks (Shipper, Consignee, Notify)
+            first_page = pdf.pages[0]
+            data = self.get_empty_row()
+            data["Shipper"] = self.extract_dynamic_left_block(first_page, "SHIPPER", "CONSIGNEE")
+            data["Consignee"] = self.extract_dynamic_left_block(first_page, "CONSIGNEE", "NOTIFY")
+            data["Notify party 1"] = self.extract_dynamic_left_block(first_page, "NOTIFY", ["PRE-CARRIAGE", "OCEAN"])
+            
+            # 5. Remarks: Extract dynamically from the left column (Marks & Numbers)
+            try:
+                remarks_extracted = []
+                for page_idx in range(pages_to_read):
+                    page = pdf.pages[page_idx]
+                    
+                    # Find Y range
+                    top_y, bottom_y = None, None
+                    for kw in ['PARTICULARS', 'DESCRIPTION']:
+                        word = self.find_word_bbox(page, kw)
+                        if word: top_y = word['bottom']; break
+                    for kw in ['LIABILITY', 'VALOREM']:
+                        word = self.find_word_bbox(page, kw)
+                        if word: bottom_y = word['top']; break
+                    if not top_y or not bottom_y: continue
+                        
+                    # Find dynamic X boundary
+                    right_x = 175
+                    possible_lines = [line['x0'] for line in page.lines if line.get('width', 1) < 1 and line.get('x0', 0) > 100]
+                    if possible_lines:
+                        possible_lines.sort()
+                        right_x = possible_lines[0] - 2
+                    else:
+                        for w in page.extract_words():
+                            if 340 < w['top'] < 380 and w['text'] == 'NO.':
+                                right_x = w['x0'] - 2
+                                break
+
+                    cropped = page.crop((0, top_y, right_x, bottom_y))
+                    col_text = cropped.extract_text(layout=True)
+                    if not col_text: continue
+                        
+                    lines_col = col_text.split('\n')
+                    page_remarks = []
+                    for line in lines_col:
+                        line_stripped = line.strip()
+                        if 'DE C L A R' in line.upper() or 'DECLARATION' in line.upper() or line_stripped == '**': continue
+                        if re.match(r'^[A-Z]{4}[0-9]{7}', line_stripped) or '/FCL' in line_stripped or re.match(r'^-+$', line_stripped):
+                            page_remarks = [] 
+                            continue
+                        if any(kw in line_stripped.upper() for kw in ['OCEAN FREIGHT', 'DESTINATION CHARGES', 'PARTY WHO', 'SHIPPER\'S LOAD']):
+                            break
+                        
+                        if not line_stripped:
+                            if page_remarks: break 
+                            else: continue
+                                
+                        page_remarks.append(line_stripped)
+                    
+                    if page_remarks:
+                        remarks_extracted.extend(page_remarks)
+                
+                if remarks_extracted:
+                    data["Remark"] = "\n".join(remarks_extracted)
+            except Exception:
+                pass
+
+        lines = full_text.split('\n')
+        
+        # Cleanup tags from left blocks
+        for field, tags in [("Shipper", ["SH>", "SP>"]), ("Consignee", ["CN>"]), ("Notify party 1", ["NP>"])]:
+            if data[field]:
+                for tag in tags:
+                    data[field] = data[field].replace(tag, "").strip()
+        for i, line in enumerate(lines):
+            if "BOOKING NO" in line and ("WAYBILL NO" in line or "B/L NO" in line):
+                if i + 1 < len(lines):
+                    parts = lines[i + 1].split()
+                    if len(parts) >= 2:
+                        data["Bill no."] = parts[-1].strip()
+                        data["Booking"] = parts[-2].strip()
+                        
+            if "OCEAN VESSEL" in line and "VOYAGE" in line and "PORT OF LOADING" in line:
+                if i + 1 < len(lines):
+                    val = lines[i + 1].replace("Vessel & Voy", "").strip()
+                    vessel_voyage, pol = self.split_columns_by_spaces(val)
+                    vessel_name, voyage_number, rest = self.parse_vessel_voyage(vessel_voyage)
+                    
+                    data["POL"] = pol or rest
+                    data["Vessel name"] = vessel_name
+                    data["Voyage number"] = voyage_number
+                    
+            if "PORT OF DISCHARGE" in line and "PLACE OF DELIVERY" in line:
+                if i + 1 < len(lines):
+                    data["POD"], data["Place of delivery"] = self.split_columns_by_spaces(lines[i + 1])
+
+            if "DATE LADEN ON BOARD" in line:
+                if i + 1 < len(lines):
+                    data["ATD"] = lines[i + 1].strip()
+
+        # 3. Container & Gross Weight (Specific to ONE)
+        in_cargo  = False
+        conts     = []
+        
+        for line in lines:
+            if "PARTICULARS DECLARED BY SHIPPER" in line or ("DESCRIPTION OF GOODS" in line and "GROSS WEIGHT" in line):
+                in_cargo = True
+                continue
+
+            if not in_cargo:
+                continue
+
+            stop_keywords = [
+                "Declared Cargo Value", "FREIGHT & CHARGES", "OCEAN FREIGHT COLLECT",
+                "DESTINATION CHARGES COLLECT", "SIGNED", "Ocean Network Express",
+                "(ONE), AS CARRIER", "DATE CARGO RECEIVED"
+            ]
+            if any(kw in line for kw in stop_keywords):
+                in_cargo = False
+                continue
+
+            if re.match(r'\s*-{10,}', line):
+                continue
+
+            if re.match(r'\s*[A-Z]{4}[0-9]{7}\s*/', line):
+                parts = [p.strip() for p in line.split('/')]
+                cont = {col: "" for col in ["Cont no.", "Seal no.", "Total carton", "Cont type", "Total GW", "Total CBM"]}
+                cont["Cont no."] = re.search(r'[A-Z]{4}[0-9]{7}', parts[0]).group(0) if re.search(r'[A-Z]{4}[0-9]{7}', parts[0]) else parts[0].strip()
+                if len(parts) > 1: cont["Seal no."]    = parts[1]
+                if len(parts) > 2: cont["Total carton"] = parts[2].strip()
+
+                for p in parts:
+                    p_up = p.upper()
+                    type_match = re.search(r'(40HQ|20GP|40GP|45HQ|20RF|40RF|OT|FR|20HC|40HC)', p_up)
+                    if type_match:
+                        cont["Cont type"] = type_match.group(1)
+                    gw_match = re.search(r'([\d.,]+)\s*KGS', p_up)
+                    if gw_match:
+                        cont["Total GW"] = gw_match.group(1)
+                    cbm_match = re.search(r'([\d.,]+)\s*(M3|CBM)', p_up)
                     if cbm_match:
                         cont["Total CBM"] = cbm_match.group(1)
 
@@ -132,62 +298,77 @@ class OneExtractor(BaseExtractor):
         # 4. Description (Bounding Box via BaseExtractor)
         full_desc = self.extract_description_by_bbox(
             top_kw_list=['PARTICULARS', 'DESCRIPTION'],
-            bottom_kw_list=['FREIGHT', 'DECLARED', 'OCEAN', 'DESTINATION', 'SIGNED', 'CONTINUED'],
+            bottom_kw_list=['LIABILITY', 'VALOREM'],
             x_range=(210, 460),
             pages_to_read=pages_to_read
         )
         
-        # Filter Continuous Shipper info from Description by dynamically zoning the Y-gap
-        for i in range(pages_to_read):
-            page = pdf.pages[i]
-            words = page.extract_words()
-            desc_words = [w for w in words if 210 <= (w['x0']+w['x1'])/2 <= 460]
-            line_words = self.group_words_by_y(desc_words)
-            tops = sorted(line_words.keys())
+        # Post-process Description to extract any remaining Shipper/Consignee/Notify tags
+        # 1. Split string based on TOTAL XXXX PCS (or similar units)
+        desc_match = re.search(r'(?i)(.*?TOTAL\s+[\d,.]+\s*(?:PCS|PIECES|PKGS|PACKAGES|CARTONS|UNITS|BOXES))', full_desc, flags=re.DOTALL)
+        
+        true_desc = full_desc
+        remaining_text = ""
+        
+        if desc_match:
+            true_desc = desc_match.group(1).strip()
+            # Remove "** TO BE CONTINUED ON ATTACHED LIST **" if present
+            true_desc = re.sub(r'(?i)\**\s*TO BE CONTINUED ON ATTACHED LIST\s*\**', '', true_desc).strip()
             
-            shipper_start_top = None
-            shipper_end_top = None
-            for j, top in enumerate(tops):
-                text = ' '.join(w['text'] for w in sorted(line_words[top], key=lambda x: x['x0']))
-                if "SH>" in text or "TAX IDENTIFICATION" in text:
-                    if shipper_start_top is None:
-                        shipper_start_top = top
+            remaining_text = full_desc[desc_match.end():].strip()
+            
+            # Clean up remaining_text to remove standard ONE footers that might have leaked
+            footer_keywords = ["LINE TARIFF", "DELIVERY OF THE CARGO", "PREJUDICE", "OCEAN NETWORK EXPRESS", "DECLARED CARGO VALUE", "FREIGHT & CHARGES"]
+            for kw in footer_keywords:
+                idx = remaining_text.upper().find(kw)
+                if idx != -1:
+                    remaining_text = remaining_text[:idx].strip()
+
+
+        else:
+            # Fallback: if no TOTAL, cut from the first occurrence of SP/CN/NP tags
+            split_match = re.search(r'(SP>|SH>|CN>|NP>|ALSO\s+NOTIFY\s+PARTY)', full_desc, re.IGNORECASE)
+            if split_match:
+                split_idx = split_match.start()
+                true_desc = full_desc[:split_idx].strip()
+                remaining_text = full_desc[split_idx:].strip()
+            
+            # Remove "** TO BE CONTINUED ON ATTACHED LIST **" if present
+            true_desc = re.sub(r'(?i)\**\s*TO BE CONTINUED ON ATTACHED LIST\s*\**', '', true_desc).strip()
+
+        # 2. Process remaining_text by tags
+        if remaining_text:
+            tags_to_find = [
+                (r'SP>|SH>', 'Shipper'),
+                (r'CN>', 'Consignee'),
+                (r'NP>', 'Notify party 1'),
+                (r'ALSO\s+NOTIFY\s+PARTY\s*:?', 'Notify party 2')
+            ]
+            
+            found_tags = []
+            for pattern, field in tags_to_find:
+                for m in re.finditer(pattern, remaining_text, re.IGNORECASE):
+                    found_tags.append((m.start(), m.end(), field))
+            
+            # Sort tags by their appearance index
+            found_tags.sort(key=lambda x: x[0])
+            
+            for idx, (start_idx, end_idx, field) in enumerate(found_tags):
+                # Get text from the end of current tag to the start of the next tag
+                next_start = found_tags[idx+1][0] if idx + 1 < len(found_tags) else len(remaining_text)
+                content = remaining_text[end_idx:next_start].strip()
                 
-                if shipper_start_top is not None:
-                    if j + 1 < len(tops):
-                        next_top = tops[j+1]
-                        if next_top - top > 15: # Y-gap > 15 pixels (white space)
-                            shipper_end_top = top
-                            break
+                # Remove horizontal line separators if any
+                content = re.sub(r'(?m)^[-_]{3,}.*$', '', content).strip()
+                
+                if content:
+                    if data.get(field):
+                        data[field] += "\n" + content
                     else:
-                        shipper_end_top = top
-            
-            if shipper_start_top is not None and shipper_end_top is not None:
-                shipper_lines = []
-                for top in tops:
-                    if shipper_start_top <= top <= shipper_end_top:
-                        text = ' '.join(w['text'] for w in sorted(line_words[top], key=lambda x: x['x0']))
-                        text = re.sub(r'\s+', ' ', text).strip()
-                        shipper_lines.append(text)
-                
-                cont_shipper = "\n".join(shipper_lines)
-                if data["Shipper"]:
-                    data["Shipper"] += "\n" + cont_shipper
-                else:
-                    data["Shipper"] = cont_shipper
-                    
-                # Remove the shipper part from full_desc
-                for line in shipper_lines:
-                    full_desc = full_desc.replace(line, "").strip()
-                    
-        notify_match = re.search(r'((?:ALSO\s+)?NOTIFY\s+PARTY\s*:)', full_desc, re.IGNORECASE)
-        if notify_match:
-            notify_2_idx = notify_match.start()
-            notify_2_text = full_desc[notify_2_idx:].replace(notify_match.group(1), "").strip()
-            data["Notify party 2"] = re.sub(r'(?m)^[-_]{3,}.*$', '', notify_2_text).strip()
-            full_desc = full_desc[:notify_2_idx].strip()
-            
-        full_desc = re.sub(r'(?m)^[-_]{3,}.*$', '', full_desc).strip()
+                        data[field] = content
+
+        # Save true_desc as the final Description, cleaning up extra dashed lines
+        full_desc = re.sub(r'(?m)^[-_]{3,}.*$', '', true_desc).strip()
 
         if not conts:
             conts.append({})

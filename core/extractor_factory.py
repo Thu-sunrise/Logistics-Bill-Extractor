@@ -5,6 +5,7 @@ from .extractors.oocl_extractor import OoclExtractor
 from .extractors.sjj_extractor import SjjExtractor
 from .extractors.zim_extractor import ZimExtractor
 from .extractors.hmm_extractor import HmmExtractor
+from .extractors.cma_cgm_extractor import CmaCgmExtractor
 
 def process_pdf(pdf_path):
     """
@@ -29,6 +30,8 @@ def process_pdf(pdf_path):
         extractor = SjjExtractor(pdf_path)
     elif "HMM" in text_upper or "HYUNDAI MERCHANT MARINE" in text_upper:
         extractor = HmmExtractor(pdf_path)
+    elif "CMA CGM" in text_upper:
+        extractor = CmaCgmExtractor(pdf_path)
     else:
         print(f"[*] Warning: Could not identify carrier for file {pdf_path}. Skipping.")
         return [], None

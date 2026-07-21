@@ -7,7 +7,7 @@ COLUMNS = [
     "Notify party 1", "Notify party 2", "Notify party 3", "Remark",
     "POR", "POL", "Vessel name", "Voyage number", "POD", "Place of delivery",
     "Cont no.", "Seal no.", "Total carton", "Cont type",
-    "Total GW", "Total CBM", "ATD", "Description"
+    "Total GW", "Tare", "Total CBM", "ATD", "Freight", "Description"
 ]
 
 class BaseExtractor:

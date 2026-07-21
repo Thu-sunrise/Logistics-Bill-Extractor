@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
-  "download_url": "https://github.com/Thu-sunrise/Logistics-Bill-Extractor/releases/download/v1.0.0/LogisticsBillExtractor.exe",
-  "changelog": "- Sửa lỗi đọc Bill SJJ\n- Thêm cột Remark mới"
+  "version": "1.0.1",
+  "download_url": "https://github.com/Thu-sunrise/Logistics-Bill-Extractor/releases/download/v1.0.1/LogisticsBillExtractor.exe",
+  "changelog": "- Cập nhật thuật toán bóc tách cho các hãng tàu\n- Tối ưu hiệu năng"
 }

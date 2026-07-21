@@ -9,7 +9,7 @@ from tkinter import messagebox
 # Đường dẫn tới file version.json trên kho GitHub của bạn
 # Đảm bảo đường dẫn này là dạng RAW (Raw data)
 VERSION_URL = "https://raw.githubusercontent.com/Thu-sunrise/Logistics-Bill-Extractor/main/version.json"
-CURRENT_VERSION = "1.0.0"
+CURRENT_VERSION = "1.0.1"
 
 def check_for_updates():
     try:
