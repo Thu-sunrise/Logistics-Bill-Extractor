@@ -1,5 +1,5 @@
 {
-  "version": "1.0.1",
-  "download_url": "https://github.com/Thu-sunrise/Logistics-Bill-Extractor/releases/download/v1.0.1/LogisticsBillExtractor.exe",
-  "changelog": "- Cập nhật thuật toán bóc tách cho các hãng tàu\n- Tối ưu hiệu năng"
+  "version": "1.0.2",
+  "download_url": "https://github.com/Thu-sunrise/Logistics-Bill-Extractor/releases/download/v1.0.2/LogisticsBillExtractor.exe",
+  "changelog": "- Nâng cấp giao diện chia đôi linh hoạt bằng grid\n- Cải thiện thuật toán trích xuất OOCL (xử lý tiếp nối dấu *, tự động tính tổng GW/CBM, giữ nguyên dòng tổng Description)\n- Sửa lỗi bị nuốt dòng text liền kề trong file PDF"
 }
