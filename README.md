@@ -33,7 +33,6 @@
 Please refer to the following documents for detailed information:
 - **[User Manual (How to Install & Use)](docs/user_manual.md)**
 - **[Technical Architecture & File Structure](docs/architecture.md)**
-- **[Automated Testing Guide](tests/README.md)**
 - **[Release & Update Guide](docs/UPDATE_GUIDE.md)**
 
 ---
