@@ -1,6 +1,6 @@
 # LOGISTICS BILL EXTRACTOR USER MANUAL
 
-The **Logistics Bill Extractor** is a software designed to automate the extraction of data from PDF Bill of Lading (B/L) files across multiple shipping lines (ONE, HMM, SJJ, MSC, OOCL, ZIM, etc.) and output a synthesized Excel file quickly and accurately.
+The **Logistics Bill Extractor** is a software designed to automate the extraction of data from PDF Bill of Lading (B/L) files across multiple shipping lines (ONE, HMM, SJJ, MSC, OOCL, ZIM, CMA CGM, COSCO, MAERSK, K&N, Hapag-Lloyd, Schenker) and output a synthesized Excel file quickly and accurately.
 
 ---
 

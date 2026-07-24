@@ -14,6 +14,7 @@ class BaseExtractor:
     def __init__(self, pdf_path):
         self.pdf_path = pdf_path
         self.carrier_name = "UNKNOWN"
+        self.asterisk_note = ""
 
     def get_empty_row(self):
         """Initialize an empty row according to COLUMNS, with pre-assigned file name and carrier."""
@@ -46,12 +47,12 @@ class BaseExtractor:
             return parts[0], parts[1]
         return text.strip(), ""
 
-    def extract_dynamic_left_block(self, page, top_keyword, bottom_keyword, x_min=0, x_max=230, anchor_x_range=None):
+    def extract_dynamic_left_block(self, page, top_keyword, bottom_keyword, x_min=0, x_max=230, anchor_x_range=None, top_margin=5):
         """
         Extract a text block from a left-aligned area using dynamic bounding boxes 
         (Dynamic BBox) based on top and bottom anchor keywords.
         """
-        bbox = self.get_dynamic_bbox(page, top_keyword, bottom_keyword, x_min, x_max, anchor_x_range)
+        bbox = self.get_dynamic_bbox(page, top_keyword, bottom_keyword, x_min, x_max, anchor_x_range, top_margin)
         if bbox:
             text = self.extract_text_by_bbox(page, bbox)
             return text if text else ""
@@ -63,6 +64,10 @@ class BaseExtractor:
         with pdfplumber.open(self.pdf_path) as pdf:
             pages_to_read = min(pages_to_read, len(pdf.pages))
             for page in pdf.pages[:pages_to_read]:
+                if page.page_number > 1:
+                    if self.find_word_bbox(page, 'Shipper', x_range=(0, page.width/2)) or self.find_word_bbox(page, 'Vessel', x_range=(0, page.width/2)):
+                        break
+                        
                 words = page.extract_words()
                 
                 top_y = None
@@ -106,24 +111,27 @@ class BaseExtractor:
                         
         return "\n".join(desc_lines)
 
-    def find_word_bbox(self, page, keyword, x_range=None):
+    def find_word_bbox(self, page, keyword, x_range=None, case_sensitive=False, exact_match=False):
         """
-        Find the first word containing the keyword (case-insensitive) 
-        and return a dictionary containing its bounding box.
+        Find the first word containing the keyword.
         An optional x_range (min_x, max_x) can be used to narrow the search area.
         Accepts a string or a list of strings (as fallback keywords).
         """
         words = page.extract_words()
         
         if isinstance(keyword, str):
-            keywords = [keyword.upper()]
+            keywords = [keyword]
         else:
-            keywords = [k.upper() for k in keyword]
+            keywords = keyword
             
         for w in words:
-            text_upper = w['text'].upper()
             for kw in keywords:
-                if kw in text_upper:
+                text_to_check = w['text'] if case_sensitive else w['text'].upper()
+                kw_to_check = kw if case_sensitive else kw.upper()
+                
+                match = (kw_to_check == text_to_check) if exact_match else (kw_to_check in text_to_check)
+                
+                if match:
                     if x_range:
                         min_x, max_x = x_range
                         if not (min_x <= w['x0'] <= max_x):
@@ -131,7 +139,7 @@ class BaseExtractor:
                     return w
         return None
 
-    def get_dynamic_bbox(self, page, top_keyword, bottom_keyword, x_min, x_max, anchor_x_range=None):
+    def get_dynamic_bbox(self, page, top_keyword, bottom_keyword, x_min, x_max, anchor_x_range=None, top_margin=5):
         """
         Calculate a dynamic bounding box based on 2 anchor keywords.
         The bottom of the top_keyword becomes y_min (plus a margin to avoid capturing overprinted headers).
@@ -141,9 +149,6 @@ class BaseExtractor:
         search_range = anchor_x_range if anchor_x_range else (x_min, x_max)
         top_word = self.find_word_bbox(page, top_keyword, x_range=search_range)
         bottom_word = self.find_word_bbox(page, bottom_keyword, x_range=search_range)
-        
-        # Add 5 pixels margin to skip the rest of the header line (which might be overprinted)
-        top_margin = 5 
         
         if top_word and bottom_word:
             bbox = (x_min, top_word['bottom'] + top_margin, x_max, bottom_word['top'] - 2)
@@ -176,20 +181,46 @@ class BaseExtractor:
 
     def group_words_by_y(self, words, y_tolerance=4.0):
         """
-        Group words into lines based on their Y (top) coordinates.
+        Group words into lines based on their Y (top) coordinates in O(N log N) time.
         """
+        if not words:
+            return {}
+            
+        sorted_words = sorted(words, key=lambda w: w['top'])
         line_words = {}
-        for w in words:
-            matched_top = None
-            for t in line_words.keys():
-                if abs(t - w['top']) < y_tolerance:
-                    matched_top = t
-                    break
-            if matched_top is None:
-                matched_top = w['top']
-                line_words[matched_top] = []
-            line_words[matched_top].append(w)
+        
+        current_top = sorted_words[0]['top']
+        line_words[current_top] = [sorted_words[0]]
+        
+        for w in sorted_words[1:]:
+            if abs(current_top - w['top']) < y_tolerance:
+                line_words[current_top].append(w)
+            else:
+                current_top = w['top']
+                line_words[current_top] = [w]
+                
         return line_words
+
+    def clean_header(self, text, keyword_pattern):
+        """
+        Removes matched headers from the start of the text string.
+        keyword_pattern should be a regex string, e.g. r'^(Shipper/Exporter|Shipper)'
+        """
+        import re
+        if not text: return ""
+        pattern = keyword_pattern + r'.*?\n'
+        return re.sub(pattern, '', text, flags=re.IGNORECASE).strip()
+
+    def extract_container_no(self, text):
+        """
+        Extracts a container number (4 letters + 7 digits) from the text.
+        """
+        import re
+        if not text: return None
+        match = re.search(r'[A-Z]{4}\s*\d{7}', text.upper())
+        if match:
+            return match.group(0).replace(" ", "")
+        return None
 
     def extract_columns_by_x_ranges(self, page, col_x_ranges, y_range=None):
         """
@@ -226,9 +257,66 @@ class BaseExtractor:
                 
         return extracted_lines
 
+    def extract_headers(self, pdf, row):
+        """Hook method to extract header fields (Shipper, Consignee, Voyage, POL, POD, etc.)"""
+        pass
+
+    def extract_footers(self, pdf, row):
+        """Hook method to extract footer fields (Freight, ATD, Totals, etc.)"""
+        pass
+
+    def extract_description(self, pdf):
+        """Hook method to extract the description block. Returns a string."""
+        return ""
+
+    def extract_containers(self, pdf):
+        """Hook method to extract container data. Returns a list of dicts."""
+        return []
+
+    def _build_rows(self, base_row, containers):
+        """Helper to multiply the base_row by the number of containers."""
+        if not containers:
+            return [base_row]
+            
+        all_rows = []
+        for idx, cont in enumerate(containers):
+            new_row = base_row.copy()
+            new_row.update(cont) # Merge container specific keys (Cont no., Seal no., etc.)
+            
+            # Clear totals for subsequent rows if the container didn't explicitly provide them
+            if idx > 0:
+                if "Total carton" not in cont: new_row["Total carton"] = ""
+                if "Total GW" not in cont: new_row["Total GW"] = ""
+                if "Total CBM" not in cont: new_row["Total CBM"] = ""
+                
+            all_rows.append(new_row)
+            
+        return all_rows
+
     def extract(self):
         """
-        Core extraction method: Child classes for each carrier (ONE, OOCL, etc.)
-        must override this method.
+        Template method for extraction. 
+        Child classes should override the hook methods instead of this one.
         """
-        raise NotImplementedError("Child classes must override the extract() method")
+        row = self.get_empty_row()
+        self.asterisk_note = ""
+        
+        with pdfplumber.open(self.pdf_path) as pdf:
+            if not pdf.pages:
+                return [row]
+                
+            self.extract_headers(pdf, row)
+            self.extract_footers(pdf, row)
+            row["Description"] = self.extract_description(pdf)
+            containers = self.extract_containers(pdf)
+            
+        rows = self._build_rows(row, containers)
+        
+        if self.asterisk_note:
+            for r in rows:
+                for key, val in r.items():
+                    if isinstance(val, str) and '*' in val:
+                        val = val.replace('*', ' ' + self.asterisk_note).strip()
+                        r[key] = __import__('re').sub(r'\s+', ' ', val)
+                        
+        return rows

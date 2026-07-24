@@ -16,6 +16,12 @@
   - OOCL (Orient Overseas Container Line)
   - ZIM Integrated Shipping Services
   - SJJ
+  - CMA CGM
+  - COSCO
+  - MAERSK
+  - K&N (Kuehne + Nagel)
+  - Hapag-Lloyd
+  - Schenker (The Great Ocean Line / TGOL)
 - **Batch Processing:** Select a folder and the software will automatically scan and process hundreds of PDF files in just a few seconds.
 - **Auto-Update:** Integrated with an automatic mechanism connecting to GitHub Releases to download and upgrade the software without user intervention.
 - **Easy to Use:** Simple Graphical User Interface (GUI) using Tkinter, allowing Non-Tech users to easily operate via the `.exe` installer.

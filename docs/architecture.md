@@ -18,18 +18,18 @@ The project applies the **Strategy Pattern** combined with the **Factory Pattern
 
 ### Strategy Extractors
 - Located in the `core/extractors/` directory. Current extractors include:
-  - `one_extractor.py`: Processes Ocean Network Express (ONE) bills.
-  - `msc_extractor.py`: Processes Mediterranean Shipping Company (MSC) bills.
-  - `oocl_extractor.py`: Processes Orient Overseas Container Line (OOCL) bills.
-  - `zim_extractor.py`: Processes ZIM Integrated Shipping Services bills.
-  - `sjj_extractor.py`: Processes Jin Jiang Shipping (SJJ / JJDH) bills.
+  - `one_extractor.py`, `msc_extractor.py`, `oocl_extractor.py`, `zim_extractor.py`
+  - `sjj_extractor.py`, `hmm_extractor.py`, `cma_cgm_extractor.py`
+  - `cosco_extractor.py`, `maersk_extractor.py`, `kn_extractor.py`
+  - `hlo_extractor.py`, `schenker_extractor.py`
 - Inherit from `BaseExtractor`.
 - Responsible for containing specific extraction algorithms for the Bill form of EXACTLY 1 specific carrier (based on that carrier's layout or logic).
 
 ### `extractor_factory.py` (Router / Factory)
-- Responsible for initializing the correct Extractor Class based on PDF content.
-- Takes the PDF file path as input, reads the first page to detect characteristic keywords (e.g., "OCEAN NETWORK EXPRESS", "MSC", "OOCL", "ZIM", "SJJ").
-- Returns the corresponding Extractor object (e.g., `OneExtractor()`, `MscExtractor()`) for the system to perform extraction.
+- Responsible for initializing the correct Extractor Class based on PDF content using a Registry Pattern.
+- Takes the PDF file path as input, reads the first page's text, and dynamically iterates through the `EXTRACTORS` array.
+- It calls the `@classmethod is_match(text_upper)` on each Extractor to ask if it can process the file.
+- Returns the corresponding matched Extractor object for the system to perform extraction.
 
 ### `excel_exporter.py` (Data Exporter)
 - Receives the result list (List of Dictionaries) from Extractors.
@@ -45,6 +45,7 @@ The project applies the **Strategy Pattern** combined with the **Factory Pattern
 
 ## 3. Procedure for adding a new carrier
 To support a new carrier (e.g., COSCO), perform 3 simple steps without affecting or breaking the structure of existing carriers:
-1. **Create Extractor**: Create `cosco_extractor.py` file in `core/extractors/` directory.
-2. **Inherit & Logic**: Declare `class CoscoExtractor(BaseExtractor):` and override the `extract()` function. Write specific extraction algorithms for COSCO inside this function (leveraging utility functions in `BaseExtractor`).
-3. **Register Factory**: Open `core/extractor_factory.py`, import `CoscoExtractor`, and add carrier identification condition to the `process_pdf` function (e.g., `elif "COSCO" in text_upper: return CoscoExtractor(pdf_path)`).
+1. **Create Extractor**: Create a new file (e.g. `new_extractor.py`) in `core/extractors/` directory.
+2. **Inherit & Logic**: Declare `class NewExtractor(BaseExtractor):` and override the `extract()` function (leveraging utility functions in `BaseExtractor`).
+3. **Identification Logic**: Add an `@classmethod is_match(cls, text_upper)` that returns True if the text belongs to the carrier.
+4. **Register Factory**: Open `core/extractor_factory.py`, import the new class, and add it to the `EXTRACTORS` array.

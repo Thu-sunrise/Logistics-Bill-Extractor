@@ -236,3 +236,6 @@ Output/
 
 # Test outputs
 test/test_output.json
+
+# Ignore executable files
+*.exe

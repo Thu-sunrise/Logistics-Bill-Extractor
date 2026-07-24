@@ -31,29 +31,31 @@ class App(ctk.CTk):
         
         # Title
         self.title_label = ctk.CTkLabel(
-            self.header_frame, text="🚢 LOGISTICS BILL EXTRACTOR",
-            font=ctk.CTkFont(family="Segoe UI", size=22, weight="bold"),
+            self.header_frame, text="LOGISTICS BILL EXTRACTOR",
+            font=ctk.CTkFont(family="Segoe UI", size=18, weight="bold"),
             text_color="white"
         )
-        self.title_label.pack(pady=(10, 2))
+        self.title_label.pack(pady=(6, 2))
         
         # Subtitle
         self.subtitle_label = ctk.CTkLabel(
             self.header_frame, text="Tự động nhận diện và trích xuất dữ liệu từ các file PDF vận đơn (Bill of Lading)",
-            font=ctk.CTkFont(family="Segoe UI", size=13),
+            font=ctk.CTkFont(family="Segoe UI", size=12),
             text_color="#93C5FD"
         )
-        self.subtitle_label.pack(pady=(0, 8))
+        self.subtitle_label.pack(pady=(0, 6))
 
         # Supported line
         self.support_frame = ctk.CTkFrame(self.header_frame, fg_color="white", corner_radius=8)
-        self.support_frame.pack(pady=(0, 10), padx=20)
+        self.support_frame.pack(pady=(0, 6), padx=20)
+        
+        supported_lines = "Supported shipping lines: ONE, OOCL, ZIM, SJJ, MSC, HMM, CMA CGM, COSCO, MAERSK, K&N, Hapag-Lloyd, Schenker"
         self.support_label = ctk.CTkLabel(
-            self.support_frame, text="Supported shipping lines for extraction: ONE, OOCL, ZIM, SJJ, MSC, HMM",
-            font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+            self.support_frame, text=supported_lines,
+            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
             text_color="#1E3A8A"
         )
-        self.support_label.pack(padx=20, pady=4)
+        self.support_label.pack(padx=15, pady=3)
         
         # --- MAIN BODY ---
         self.main_frame = ctk.CTkFrame(self, fg_color="transparent")
